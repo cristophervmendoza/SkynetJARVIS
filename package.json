@@ -1,0 +1,30 @@
+{
+  "name": "skynet-jarvis-local1",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Nexa AI Workspace - All-in-one AI platform",
+  "scripts": {
+    "install:all": "npm install && pip install -r services/api/requirements.txt",
+    "dev": "concurrently --names \"WEB,API\" --prefix-colors \"cyan,yellow\" \"npm run dev:web\" \"npm run dev:api\"",
+    "dev:web": "npm run dev -w apps/web",
+    "dev:api": "cd services/api && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:desktop": "npm run dev -w apps/desktop",
+    "build": "npm run build -w packages/types && npm run build -w packages/ui && npm run build -w apps/web",
+    "lint": "npm run lint -w apps/web",
+    "typecheck": "npm run typecheck -w apps/web"
+  },
+  "workspaces": [
+    "apps/web",
+    "services/api",
+    "packages/types",
+    "packages/ui",
+    "packages/config",
+    "packages/database",
+    "packages/prompts"
+  ],
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.11.0"
+  }
+}

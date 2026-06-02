@@ -1,0 +1,433 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+enum UserRole {
+  owner
+  admin
+  developer
+  designer
+  researcher
+  user
+  viewer
+}
+
+enum ChatMode {
+  chat
+  document
+  ppt
+  code
+  research
+  jarvis
+  image
+  video
+  three_d
+  teach
+  gem
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+  tool
+}
+
+enum SubscriptionTier {
+  free
+  pro
+  team
+  enterprise
+}
+
+enum ConnectionProvider {
+  google
+  obsidian
+  github
+  notion
+  slack
+  figma
+  blender
+  custom
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String
+  avatar         String?
+  role           UserRole  @default(user)
+  organizationId String
+  preferences    Json      @default("{}")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  accounts     Account[]
+  sessions     Session[]
+  chats        Chat[]
+  projects     Project[]
+  documents    Document[]
+  memories     Memory[]
+  gems         Gem[]
+  connections  Connection[]
+  apiKeys      ApiKey[]
+  agentRuns    AgentRun[]
+  auditLogs    AuditLog[]
+  subscription Subscription?
+  settings     AppSettings?
+}
+
+model Account {
+  id                String @id @default(cuid())
+  userId            String
+  provider          String
+  providerAccountId String
+  accessToken       String?
+  refreshToken      String?
+  expiresAt         Int?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  device    String?
+  ip        String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      SubscriptionTier @default(free)
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Chat {
+  id           String   @id @default(cuid())
+  title        String
+  projectId    String?
+  userId       String
+  mode         ChatMode @default(chat)
+  gemId        String?
+  modelId      String?
+  tags         String[] @default([])
+  favorite     Boolean  @default(false)
+  summary      String?
+  messageCount Int      @default(0)
+  tokenCount   Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project  Project?  @relation(fields: [projectId], references: [id])
+  messages Message[]
+}
+
+model Message {
+  id        String      @id @default(cuid())
+  chatId    String
+  role      MessageRole
+  content   String
+  modelId   String?
+  toolCalls Json?
+  toolResults Json?
+  metadata  Json?
+  createdAt DateTime    @default(now())
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+}
+
+model Project {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  userId       String
+  workspaceId  String?
+  status       String   @default("active")
+  tags         String[] @default([])
+  skills       String[] @default([])
+  gemIds       String[] @default([])
+  connections  String[] @default([])
+  chatIds      String[] @default([])
+  documentIds  String[] @default([])
+  memoryCount  Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chats     Chat[]
+  documents Document[]
+  memories  Memory[]
+  tasks     Task[]
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  contentType String   @default("markdown")
+  projectId   String?
+  userId      String
+  tags        String[] @default([])
+  version     Int      @default(1)
+  fileUrl     String?
+  fileSize    Int?
+  summary     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id])
+  chunks  DocumentChunk[]
+}
+
+model DocumentChunk {
+  id         String   @id @default(cuid())
+  documentId String
+  content    String
+  embedding  Unsupported("vector(1536)")?
+  metadata   Json?
+  chunkIndex Int
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model Memory {
+  id             String   @id @default(cuid())
+  userId         String
+  projectId      String?
+  level          String   @default("user")
+  type           String   @default("note")
+  title          String
+  content        String
+  embedding      Unsupported("vector(1536)")?
+  tags           String[] @default([])
+  source         String?
+  importance     Int      @default(1)
+  externalSource String?
+  externalPath   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id])
+}
+
+model Gem {
+  id               String   @id @default(cuid())
+  name             String
+  role             String
+  instructions     String
+  userId           String
+  modelId          String
+  allowedTools     String[] @default([])
+  allowedConnections String[] @default([])
+  memoryEnabled    Boolean  @default(true)
+  responseStyle    String   @default("professional")
+  systemPrompt     String
+  icon             String?
+  color            String?
+  commands         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Connection {
+  id           String             @id @default(cuid())
+  userId       String
+  provider     ConnectionProvider
+  name         String
+  status       String             @default("disconnected")
+  scopes       String[]           @default([])
+  accessToken  String?
+  refreshToken String?
+  expiresAt    DateTime?
+  metadata     Json?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  key       String   @unique
+  provider  String
+  scopes    String[] @default([])
+  lastUsed  DateTime?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Skill {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  displayName   String
+  description   String
+  version       String   @default("1.0.0")
+  author        String?
+  category      String
+  icon          String?
+  tools         String[] @default([])
+  permissions   Json?
+  memoryPolicy  Json?
+  installed     Boolean  @default(false)
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+}
+
+model MCPServer {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  type        String   @default("custom")
+  transport   String   @default("stdio")
+  command     String?
+  args        String[] @default([])
+  url         String?
+  tools       Json?
+  prompts     Json?
+  enabled     Boolean  @default(true)
+  status      String   @default("disconnected")
+  userId      String?
+  permissions Json?
+  createdAt   DateTime @default(now())
+}
+
+model AgentRun {
+  id               String   @id @default(cuid())
+  userId           String
+  chatId           String
+  goal             String
+  plan             Json?
+  status           String   @default("idle")
+  toolsUsed        String[] @default([])
+  currentStep      Int      @default(0)
+  result           String?
+  error            String?
+  startedAt        DateTime @default(now())
+  completedAt      DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steps AgentStep[]
+}
+
+model AgentStep {
+  id                String   @id @default(cuid())
+  runId             String
+  stepNumber        Int
+  action            String
+  tool              String?
+  input             String?
+  output            String?
+  status            String   @default("pending")
+  requiresApproval  Boolean  @default(false)
+  approved          Boolean?
+  startedAt         DateTime?
+  completedAt       DateTime?
+
+  run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  resource   String
+  resourceId String?
+  details    Json?
+  ip         String
+  timestamp  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Subscription {
+  id                    String           @id @default(cuid())
+  userId                String           @unique
+  organizationId        String?
+  tier                  SubscriptionTier @default(free)
+  status                String           @default("active")
+  interval              String           @default("monthly")
+  currentPeriodStart    DateTime         @default(now())
+  currentPeriodEnd      DateTime
+  cancelAtPeriodEnd     Boolean          @default(false)
+  stripeCustomerId      String?
+  stripeSubscriptionId  String?
+  paymentProvider       String           @default("stripe")
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Invoice {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  amount         Float
+  currency       String   @default("USD")
+  status         String   @default("open")
+  periodStart    DateTime
+  periodEnd      DateTime
+  paidAt         DateTime?
+  pdfUrl         String?
+  createdAt      DateTime @default(now())
+}
+
+model UsageEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  quantity  Int      @default(1)
+  modelId   String?
+  metadata  Json?
+  timestamp DateTime @default(now())
+}
+
+model AppSettings {
+  id     String @id @default(cuid())
+  userId String @unique
+  theme  Json   @default("{}")
+  chat   Json   @default("{}")
+  editor Json   @default("{}")
+  privacy Json  @default("{}")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  projectId   String
+  title       String
+  description String?
+  status      String   @default("todo")
+  priority    String   @default("medium")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
